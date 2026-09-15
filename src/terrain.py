@@ -468,3 +468,46 @@ def calculate_water_score(distance_m):
     )
 
     return water_score
+def calculate_road_distance(
+    candidate_mask,
+    roads_gdf,
+    transform,
+    crs,
+    cell_size_x,
+    cell_size_y,
+    highway_types,
+):
+    import rasterio.features
+    from scipy.ndimage import distance_transform_edt
+
+    roads = roads_gdf[
+        roads_gdf["highway"].apply(
+            lambda value: any(
+                highway in highway_types
+                for highway in (
+                    value if isinstance(value, list)
+                    else [value]
+                )
+            )
+        )
+    ]
+
+    roads = roads.to_crs(crs)
+
+    road_mask = rasterio.features.rasterize(
+        [(geom, 1) for geom in roads.geometry if geom is not None],
+        out_shape=candidate_mask.shape,
+        transform=transform,
+        fill=0,
+        dtype="uint8",
+    )
+
+    distance_pixels = distance_transform_edt(road_mask == 0)
+
+    cell_size = (cell_size_x + cell_size_y) / 2
+
+    distance_m = distance_pixels * cell_size
+
+    distance_m[candidate_mask == 0] = 0
+
+    return distance_m

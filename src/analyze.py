@@ -13,6 +13,7 @@ from terrain import (
     calculate_terrain_quality,
     calculate_water_distance,
     calculate_water_score,
+    calculate_road_distance,
 )
 
 
@@ -396,3 +397,45 @@ print(
     ) * 100,
     "%"
 )
+roads_path = "data/raw/osm/roads.gpkg"
+
+roads = gpd.read_file(roads_path)
+
+major_types = [
+    "motorway",
+    "trunk",
+    "primary",
+    "motorway_link",
+    "trunk_link",
+    "primary_link",
+]
+
+major_road_distance = calculate_road_distance(
+    candidate_mask,
+    roads,
+    transform,
+    crs,
+    cell_size_x,
+    cell_size_y,
+    major_types,
+)
+
+print("\nMajor Road Distance:")
+print("Min:", major_road_distance[candidate_mask].min())
+print("Max:", major_road_distance[candidate_mask].max())
+print("Media:", major_road_distance[candidate_mask].mean())
+
+with rasterio.open(
+    "data/processed/major_road_distance.tif",
+    "w",
+    driver="GTiff",
+    height=major_road_distance.shape[0],
+    width=major_road_distance.shape[1],
+    count=1,
+    dtype="float32",
+    crs=crs,
+    transform=transform,
+) as dst:
+    dst.write(major_road_distance.astype("float32"), 1)
+
+print("Major Road Distance salvata: data/processed/major_road_distance.tif")
