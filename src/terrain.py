@@ -309,12 +309,14 @@ def calculate_terrain_quality(
     surface_score,
     area_score,
     water_score,
+    road_score,
 ):
     terrain_quality = (
-        slope_score * 0.4
-        + surface_score * 0.25
-        + area_score * 0.2
-        + water_score * 0.15
+        slope_score * 0.35
+        + surface_score * 0.225
+        + area_score * 0.175
+        + water_score * 0.125
+        + road_score * 0.125
     )
 
     return np.clip(terrain_quality, 0, 1)

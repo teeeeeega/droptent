@@ -233,43 +233,6 @@ print(
 # TENT SCORE COMBINATO
 # ============================================================
 
-terrain_quality = calculate_terrain_quality(
-    slope_score,
-    surface_score,
-    area_score,
-    water_score,
-)
-
-terrain_quality[candidate_mask == 0] = 0
-
-print("\nTerrain Quality:")
-print("Min:", terrain_quality.min())
-print("Max:", terrain_quality.max())
-print("Media:", terrain_quality.mean())
-
-terrain_quality_output = "data/processed/terrain_quality.tif"
-
-with rasterio.open(
-    terrain_quality_output,
-    "w",
-    driver="GTiff",
-    height=terrain_quality.shape[0],
-    width=terrain_quality.shape[1],
-    count=1,
-    dtype="float32",
-    crs=crs,
-    transform=transform,
-) as output:
-    output.write(
-        terrain_quality.astype(np.float32),
-        1,
-    )
-
-print(
-    "\nTerrain Quality salvata:",
-    terrain_quality_output
-)
-
 tent_score = calculate_tent_score(
     slope_score,
     surface_score
@@ -439,6 +402,24 @@ print("Media:", road_score[candidate_mask].mean())
 print("Score > 0:", (road_score[candidate_mask] > 0).mean() * 100, "%")
 print("Score >= 0.5:", (road_score[candidate_mask] >= 0.5).mean() * 100, "%")
 print("Score >= 0.9:", (road_score[candidate_mask] >= 0.9).mean() * 100, "%")
+
+terrain_quality = calculate_terrain_quality(
+    slope_score,
+    surface_score,
+    area_score,
+    water_score,
+    road_score,
+)
+
+terrain_quality[candidate_mask == 0] = 0
+
+print("\nTerrain Quality:")
+print("Min:", terrain_quality.min())
+print("Max:", terrain_quality.max())
+print("Media:", terrain_quality.mean())
+print("Media candidate:", terrain_quality[candidate_mask].mean())
+print(">= 0.6:", (terrain_quality[candidate_mask] >= 0.6).mean() * 100, "%")
+print(">= 0.8:", (terrain_quality[candidate_mask] >= 0.8).mean() * 100, "%")
 
 road_score_output = road_score.astype("float32").copy()
 road_score_output[candidate_mask == 0] = -1
