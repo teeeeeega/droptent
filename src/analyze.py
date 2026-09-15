@@ -8,6 +8,8 @@ from terrain import (
     calculate_tent_score,
     detect_flat_areas,
     calculate_candidate_mask,
+    calculate_area_scores,
+    calculate_terrain_quality,
 )
 
 
@@ -70,6 +72,13 @@ flat_areas = detect_flat_areas(
     cell_size_y,
     max_slope=10.0,
     min_area_m2=5000
+)
+
+area_score = calculate_area_scores(
+    slope,
+    cell_size_x,
+    cell_size_y,
+    max_slope=10.0,
 )
 
 print("\nAree pianeggianti:")
@@ -189,6 +198,40 @@ print(
 # ============================================================
 # TENT SCORE COMBINATO
 # ============================================================
+
+terrain_quality = calculate_terrain_quality(
+    slope_score,
+    surface_score,
+    area_score,
+)
+
+print("\nTerrain Quality:")
+print("Min:", terrain_quality.min())
+print("Max:", terrain_quality.max())
+print("Media:", terrain_quality.mean())
+
+terrain_quality_output = "data/processed/terrain_quality.tif"
+
+with rasterio.open(
+    terrain_quality_output,
+    "w",
+    driver="GTiff",
+    height=terrain_quality.shape[0],
+    width=terrain_quality.shape[1],
+    count=1,
+    dtype="float32",
+    crs=crs,
+    transform=transform,
+) as output:
+    output.write(
+        terrain_quality.astype(np.float32),
+        1,
+    )
+
+print(
+    "\nTerrain Quality salvata:",
+    terrain_quality_output
+)
 
 tent_score = calculate_tent_score(
     slope_score,

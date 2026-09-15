@@ -304,3 +304,64 @@ def calculate_candidate_mask(
     )
 
     return candidate_mask
+def calculate_terrain_quality(
+    slope_score,
+    surface_score,
+    area_score,
+):
+    terrain_quality = (
+        slope_score * 0.5
+        + surface_score * 0.3
+        + area_score * 0.2
+    )
+
+    return np.clip(terrain_quality, 0, 1)
+
+def calculate_area_score(
+    area_m2,
+    min_area_m2=500,
+    ideal_area_m2=5000,
+):
+    area_score = (
+        (area_m2 - min_area_m2)
+        / (ideal_area_m2 - min_area_m2)
+    )
+
+    return np.clip(area_score, 0, 1)
+def calculate_area_scores(
+    slope,
+    cell_size_x,
+    cell_size_y,
+    max_slope=10.0,
+):
+    flat_mask = slope <= max_slope
+
+    from scipy import ndimage
+
+    structure = ndimage.generate_binary_structure(2, 2)
+
+    labeled_areas, num_areas = ndimage.label(
+        flat_mask,
+        structure=structure,
+    )
+
+    cell_area_m2 = cell_size_x * cell_size_y
+
+    area_sizes = ndimage.sum(
+        flat_mask,
+        labeled_areas,
+        range(1, num_areas + 1),
+    )
+
+    area_sizes_m2 = area_sizes * cell_area_m2
+
+    area_scores = np.zeros(
+        num_areas + 1,
+        dtype=float,
+    )
+
+    area_scores[1:] = calculate_area_score(
+        area_sizes_m2
+    )
+
+    return area_scores[labeled_areas]
