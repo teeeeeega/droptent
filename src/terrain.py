@@ -169,7 +169,7 @@ def calculate_surface_score(worldcover):
     surface_score[worldcover == 50] = 0.00
 
     # 60 = Bare / sparse vegetation
-    surface_score[worldcover == 60] = 0.90
+    surface_score[worldcover == 60] = 0.70
 
     # 70 = Snow and ice
     surface_score[worldcover == 70] = 0.00
