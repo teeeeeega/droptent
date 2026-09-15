@@ -205,6 +205,8 @@ terrain_quality = calculate_terrain_quality(
     area_score,
 )
 
+terrain_quality[candidate_mask == 0] = 0
+
 print("\nTerrain Quality:")
 print("Min:", terrain_quality.min())
 print("Max:", terrain_quality.max())
