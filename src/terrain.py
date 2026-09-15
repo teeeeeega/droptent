@@ -365,3 +365,61 @@ def calculate_area_scores(
     )
 
     return area_scores[labeled_areas]
+def calculate_water_distance(
+    candidate_mask,
+    water_gdf,
+    transform,
+    crs,
+    cell_size_x,
+    cell_size_y,
+):
+    """
+    Calcola la distanza minima dall'acqua per ogni pixel candidato.
+
+    La distanza viene restituita in metri.
+    """
+    import geopandas as gpd
+    from scipy.ndimage import distance_transform_edt
+
+    # Trasforma l'acqua nel CRS del DEM
+    water_projected = water_gdf.to_crs(crs)
+
+    # Crea una maschera vuota
+    water_mask = np.zeros(
+        candidate_mask.shape,
+        dtype=bool,
+    )
+
+    # Rasterizza le geometrie dell'acqua
+    from rasterio.features import rasterize
+
+    shapes = [
+        (geometry, 1)
+        for geometry in water_projected.geometry
+        if geometry is not None
+        and not geometry.is_empty
+        and geometry.geom_type in ("Polygon", "MultiPolygon")
+    ]
+
+    water_mask = rasterize(
+        shapes,
+        out_shape=candidate_mask.shape,
+        transform=transform,
+        fill=0,
+        dtype="uint8",
+    ).astype(bool)
+
+    # Distanza in pixel dall'acqua
+    distance_pixels = distance_transform_edt(
+        ~water_mask
+    )
+
+    # Conversione in metri
+    distance_m = distance_pixels * np.mean(
+        (cell_size_x, cell_size_y)
+    )
+
+    # Manteniamo la distanza solo nelle aree candidate
+    distance_m[~candidate_mask] = 0
+
+    return distance_m

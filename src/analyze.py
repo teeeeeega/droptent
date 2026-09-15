@@ -1,3 +1,4 @@
+import geopandas as gpd
 import numpy as np
 import rasterio
 from terrain import (
@@ -10,6 +11,7 @@ from terrain import (
     calculate_candidate_mask,
     calculate_area_scores,
     calculate_terrain_quality,
+    calculate_water_distance,
 )
 
 
@@ -26,6 +28,8 @@ worldcover_path = (
     "data/processed/"
     "worldcover_aligned.tif"
 )
+
+water_path = "data/raw/osm/water.gpkg"
 
 
 # ============================================================
@@ -144,6 +148,22 @@ candidate_mask = calculate_candidate_mask(
     surface_score,
     min_surface_score=0.5
 )
+
+water = gpd.read_file(water_path)
+
+water_distance = calculate_water_distance(
+    candidate_mask,
+    water,
+    transform,
+    crs,
+    cell_size_x,
+    cell_size_y,
+)
+
+print("\nWater Distance:")
+print("Min:", water_distance[candidate_mask].min())
+print("Max:", water_distance[candidate_mask].max())
+print("Media:", water_distance[candidate_mask].mean())
 
 candidate_area_m2 = (
     np.sum(candidate_mask)

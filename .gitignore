@@ -21,3 +21,4 @@ results/
 
 # Raw geospatial datasets
 data/raw/
+cache/
