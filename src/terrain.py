@@ -511,3 +511,35 @@ def calculate_road_distance(
     distance_m[candidate_mask == 0] = 0
 
     return distance_m
+
+def calculate_road_score(distance_m):
+    road_score = np.zeros_like(distance_m, dtype=float)
+
+    # 0-100 m: troppo vicino alla strada
+    road_score[distance_m <= 100] = 0.0
+
+    # 100-300 m: aumenta da 0 a 0.5
+    mask = (distance_m > 100) & (distance_m <= 300)
+    road_score[mask] = (
+        0.5 * ((distance_m[mask] - 100) / 200)
+    )
+
+    # 300-1000 m: aumenta da 0.5 a 1
+    mask = (distance_m > 300) & (distance_m <= 1000)
+    road_score[mask] = (
+        0.5 + 0.5 * ((distance_m[mask] - 300) / 700)
+    )
+
+    # 1-3 km: diminuisce da 1 a 0.5
+    mask = (distance_m > 1000) & (distance_m <= 3000)
+    road_score[mask] = (
+        1.0 - 0.5 * ((distance_m[mask] - 1000) / 2000)
+    )
+
+    # Oltre 3 km: diminuisce da 0.5 a 0
+    mask = distance_m > 3000
+    road_score[mask] = (
+        0.5 * (1 - (distance_m[mask] - 3000) / 3000)
+    )
+
+    return np.clip(road_score, 0, 1)

@@ -14,6 +14,7 @@ from terrain import (
     calculate_water_distance,
     calculate_water_score,
     calculate_road_distance,
+    calculate_road_score,
 )
 
 
@@ -424,6 +425,39 @@ print("\nMajor Road Distance:")
 print("Min:", major_road_distance[candidate_mask].min())
 print("Max:", major_road_distance[candidate_mask].max())
 print("Media:", major_road_distance[candidate_mask].mean())
+
+road_score = calculate_road_score(
+    major_road_distance
+)
+
+road_score[candidate_mask == 0] = 0
+
+print("\nRoad Score:")
+print("Min:", road_score[candidate_mask].min())
+print("Max:", road_score[candidate_mask].max())
+print("Media:", road_score[candidate_mask].mean())
+print("Score > 0:", (road_score[candidate_mask] > 0).mean() * 100, "%")
+print("Score >= 0.5:", (road_score[candidate_mask] >= 0.5).mean() * 100, "%")
+print("Score >= 0.9:", (road_score[candidate_mask] >= 0.9).mean() * 100, "%")
+
+road_score_output = road_score.astype("float32").copy()
+road_score_output[candidate_mask == 0] = -1
+
+with rasterio.open(
+    "data/processed/road_score.tif",
+    "w",
+    driver="GTiff",
+    height=road_score_output.shape[0],
+    width=road_score_output.shape[1],
+    count=1,
+    dtype="float32",
+    crs=crs,
+    transform=transform,
+    nodata=-1,
+) as dst:
+    dst.write(road_score_output, 1)
+
+print("Road Score salvato: data/processed/road_score.tif")
 
 with rasterio.open(
     "data/processed/major_road_distance.tif",
