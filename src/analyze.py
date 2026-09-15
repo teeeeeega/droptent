@@ -15,6 +15,8 @@ from terrain import (
     calculate_water_score,
     calculate_road_distance,
     calculate_road_score,
+    calculate_track_distance,
+    calculate_track_score,
 )
 
 
@@ -384,6 +386,64 @@ major_road_distance = calculate_road_distance(
     major_types,
 )
 
+track_distance = calculate_track_distance(
+    candidate_mask,
+    roads,
+    transform,
+    crs,
+    cell_size_x,
+    cell_size_y,
+)
+
+def calculate_track_score(distance_m):
+    track_score = np.zeros_like(distance_m, dtype=float)
+
+    # Entro 100 m: accesso molto facile
+    track_score[distance_m <= 100] = 1.0
+
+    # 100-500 m: diminuisce da 1 a 0.8
+    mask = (distance_m > 100) & (distance_m <= 500)
+    track_score[mask] = (
+        1.0 - 0.2 * ((distance_m[mask] - 100) / 400)
+    )
+
+    # 500-1000 m: diminuisce da 0.8 a 0.5
+    mask = (distance_m > 500) & (distance_m <= 1000)
+    track_score[mask] = (
+        0.8 - 0.3 * ((distance_m[mask] - 500) / 500)
+    )
+
+    # 1-2 km: diminuisce da 0.5 a 0.2
+    mask = (distance_m > 1000) & (distance_m <= 2000)
+    track_score[mask] = (
+        0.5 - 0.3 * ((distance_m[mask] - 1000) / 1000)
+    )
+
+    # Oltre 2 km: diminuisce fino a 0
+    mask = distance_m > 2000
+    track_score[mask] = (
+        0.2 * (1 - (distance_m[mask] - 2000) / 2000)
+    )
+
+    return np.clip(track_score, 0, 1)
+
+print("\nTrack Distance:")
+print("Min:", track_distance[candidate_mask].min())
+print("Max:", track_distance[candidate_mask].max())
+print("Media:", track_distance[candidate_mask].mean())
+
+track_score = calculate_track_score(track_distance)
+
+track_score[candidate_mask == 0] = 0
+
+print("\nTrack Score:")
+print("Min:", track_score[candidate_mask].min())
+print("Max:", track_score[candidate_mask].max())
+print("Media:", track_score[candidate_mask].mean())
+print("Score > 0:", (track_score[candidate_mask] > 0).mean() * 100, "%")
+print("Score >= 0.5:", (track_score[candidate_mask] >= 0.5).mean() * 100, "%")
+print("Score >= 0.8:", (track_score[candidate_mask] >= 0.8).mean() * 100, "%")
+
 print("\nMajor Road Distance:")
 print("Min:", major_road_distance[candidate_mask].min())
 print("Max:", major_road_distance[candidate_mask].max())
@@ -454,3 +514,21 @@ with rasterio.open(
     dst.write(major_road_distance.astype("float32"), 1)
 
 print("Major Road Distance salvata: data/processed/major_road_distance.tif")
+track_score_output = track_score.astype("float32").copy()
+track_score_output[candidate_mask == 0] = -1
+
+with rasterio.open(
+    "data/processed/track_score.tif",
+    "w",
+    driver="GTiff",
+    height=track_score_output.shape[0],
+    width=track_score_output.shape[1],
+    count=1,
+    dtype="float32",
+    crs=crs,
+    transform=transform,
+    nodata=-1,
+) as dst:
+    dst.write(track_score_output, 1)
+
+print("Track Score salvato: data/processed/track_score.tif")

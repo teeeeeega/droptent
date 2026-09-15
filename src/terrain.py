@@ -514,6 +514,49 @@ def calculate_road_distance(
 
     return distance_m
 
+def calculate_track_distance(
+    candidate_mask,
+    roads_gdf,
+    transform,
+    crs,
+    cell_size_x,
+    cell_size_y,
+):
+    import rasterio.features
+    from scipy.ndimage import distance_transform_edt
+
+    tracks = roads_gdf[
+        roads_gdf["highway"].apply(
+            lambda value: any(
+                highway == "track"
+                for highway in (
+                    value if isinstance(value, list)
+                    else [value]
+                )
+            )
+        )
+    ]
+
+    tracks = tracks.to_crs(crs)
+
+    track_mask = rasterio.features.rasterize(
+        [(geom, 1) for geom in tracks.geometry if geom is not None],
+        out_shape=candidate_mask.shape,
+        transform=transform,
+        fill=0,
+        dtype="uint8",
+    )
+
+    distance_pixels = distance_transform_edt(track_mask == 0)
+
+    cell_size = (cell_size_x + cell_size_y) / 2
+
+    distance_m = distance_pixels * cell_size
+
+    distance_m[candidate_mask == 0] = 0
+
+    return distance_m
+
 def calculate_road_score(distance_m):
     road_score = np.zeros_like(distance_m, dtype=float)
 
@@ -545,3 +588,35 @@ def calculate_road_score(distance_m):
     )
 
     return np.clip(road_score, 0, 1)
+
+def calculate_track_score(distance_m):
+    track_score = np.zeros_like(distance_m, dtype=float)
+
+    # Entro 100 m: accesso molto facile
+    track_score[distance_m <= 100] = 1.0
+
+    # 100-500 m: diminuisce da 1 a 0.8
+    mask = (distance_m > 100) & (distance_m <= 500)
+    track_score[mask] = (
+        1.0 - 0.2 * ((distance_m[mask] - 100) / 400)
+    )
+
+    # 500-1000 m: diminuisce da 0.8 a 0.5
+    mask = (distance_m > 500) & (distance_m <= 1000)
+    track_score[mask] = (
+        0.8 - 0.3 * ((distance_m[mask] - 500) / 500)
+    )
+
+    # 1-2 km: diminuisce da 0.5 a 0.2
+    mask = (distance_m > 1000) & (distance_m <= 2000)
+    track_score[mask] = (
+        0.5 - 0.3 * ((distance_m[mask] - 1000) / 1000)
+    )
+
+    # Oltre 2 km: diminuisce fino a 0
+    mask = distance_m > 2000
+    track_score[mask] = (
+        0.2 * (1 - (distance_m[mask] - 2000) / 2000)
+    )
+
+    return np.clip(track_score, 0, 1)
