@@ -12,6 +12,7 @@ from terrain import (
     calculate_area_scores,
     calculate_terrain_quality,
     calculate_water_distance,
+    calculate_water_score,
 )
 
 
@@ -165,6 +166,17 @@ print("Min:", water_distance[candidate_mask].min())
 print("Max:", water_distance[candidate_mask].max())
 print("Media:", water_distance[candidate_mask].mean())
 
+water_score = calculate_water_score(
+    water_distance
+)
+
+water_score[candidate_mask == 0] = 0
+
+print("\nWater Score:")
+print("Min:", water_score[candidate_mask].min())
+print("Max:", water_score[candidate_mask].max())
+print("Media:", water_score[candidate_mask].mean())
+
 candidate_area_m2 = (
     np.sum(candidate_mask)
     * cell_size_x
@@ -223,6 +235,7 @@ terrain_quality = calculate_terrain_quality(
     slope_score,
     surface_score,
     area_score,
+    water_score,
 )
 
 terrain_quality[candidate_mask == 0] = 0

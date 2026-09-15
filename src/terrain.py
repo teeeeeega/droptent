@@ -308,11 +308,13 @@ def calculate_terrain_quality(
     slope_score,
     surface_score,
     area_score,
+    water_score,
 ):
     terrain_quality = (
-        slope_score * 0.5
-        + surface_score * 0.3
+        slope_score * 0.4
+        + surface_score * 0.25
         + area_score * 0.2
+        + water_score * 0.15
     )
 
     return np.clip(terrain_quality, 0, 1)
@@ -420,6 +422,49 @@ def calculate_water_distance(
     )
 
     # Manteniamo la distanza solo nelle aree candidate
+    # Imposta a 0 la distanza nelle aree non candidate
     distance_m[~candidate_mask] = 0
 
     return distance_m
+
+
+def calculate_water_score(distance_m):
+    """
+    Calcola uno score in base alla distanza dall'acqua.
+    """
+
+    water_score = np.zeros_like(
+        distance_m,
+        dtype=float,
+    )
+
+    water_score[distance_m <= 100] = 1.0
+
+    mask = (
+        (distance_m > 100)
+        & (distance_m <= 500)
+    )
+
+    water_score[mask] = (
+        1.0
+        - 0.5 * (
+            (distance_m[mask] - 100)
+            / 400
+        )
+    )
+
+    mask = (
+        (distance_m > 500)
+        & (distance_m <= 1000)
+    )
+
+    water_score[mask] = (
+        0.5
+        * (
+            1
+            - (distance_m[mask] - 500)
+            / 500
+        )
+    )
+
+    return water_score
