@@ -1,12 +1,13 @@
 import numpy as np
 import rasterio
-
 from terrain import (
     load_dem,
     calculate_slope,
     calculate_slope_score,
     calculate_surface_score,
     calculate_tent_score,
+    detect_flat_areas,
+    calculate_candidate_mask,
 )
 
 
@@ -29,7 +30,7 @@ worldcover_path = (
 # CARICAMENTO DEM
 # ============================================================
 
-elevation, cell_size_x, cell_size_y, crs, bounds = (
+elevation, cell_size_x, cell_size_y, crs, bounds, transform = (
     load_dem(dem_path)
 )
 
@@ -59,6 +60,37 @@ slope = calculate_slope(
     cell_size_y
 )
 
+# ============================================================
+# RILEVAMENTO AREE PIANEGGIANTI
+# ============================================================
+
+flat_areas = detect_flat_areas(
+    slope,
+    cell_size_x,
+    cell_size_y,
+    max_slope=10.0,
+    min_area_m2=5000
+)
+
+print("\nAree pianeggianti:")
+
+flat_area_m2 = (
+    np.sum(flat_areas)
+    * cell_size_x
+    * cell_size_y
+)
+
+print(
+    "Superficie valida:",
+    flat_area_m2,
+    "m²"
+)
+
+print(
+    "Percentuale area:",
+    np.mean(flat_areas) * 100,
+    "%"
+)
 
 # ============================================================
 # SLOPE SCORE
@@ -94,6 +126,65 @@ surface_score = calculate_surface_score(
     worldcover
 )
 
+# ============================================================
+# CANDIDATE TERRAIN
+# ============================================================
+
+candidate_mask = calculate_candidate_mask(
+    flat_areas,
+    surface_score,
+    min_surface_score=0.5
+)
+
+candidate_area_m2 = (
+    np.sum(candidate_mask)
+    * cell_size_x
+    * cell_size_y
+)
+
+print("\nCandidate Terrain:")
+
+print(
+    "Superficie candidata:",
+    candidate_area_m2,
+    "m²"
+)
+
+print(
+    "Percentuale area:",
+    np.mean(candidate_mask) * 100,
+    "%"
+)
+
+# ============================================================
+# ESPORTAZIONE CANDIDATE MASK
+# ============================================================
+
+output_path = (
+    "data/processed/"
+    "candidate_mask.tif"
+)
+
+with rasterio.open(
+    output_path,
+    "w",
+    driver="GTiff",
+    height=candidate_mask.shape[0],
+    width=candidate_mask.shape[1],
+    count=1,
+    dtype="uint8",
+    crs=crs,
+    transform=transform,
+) as output:
+    output.write(
+        candidate_mask.astype(np.uint8),
+        1
+    )
+
+print(
+    "\nCandidate mask salvata:",
+    output_path
+)
 
 # ============================================================
 # TENT SCORE COMBINATO

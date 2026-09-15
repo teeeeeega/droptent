@@ -36,12 +36,13 @@ def load_dem(path):
     )
 
     return (
-        elevation,
-        cell_size_x,
-        cell_size_y,
-        crs,
-        bounds,
-    )
+    elevation,
+    cell_size_x,
+    cell_size_y,
+    crs,
+    bounds,
+    transform,
+)
 
 
 # ============================================================
@@ -210,3 +211,96 @@ def calculate_tent_score(
     )
 
     return tent_score
+
+# ============================================================
+# RILEVAMENTO AREE PIANEGGIANTI
+# ============================================================
+
+def detect_flat_areas(
+    slope,
+    cell_size_x,
+    cell_size_y,
+    max_slope=10.0,
+    min_area_m2=5000
+):
+    """
+    Individua aree di terreno sufficientemente pianeggianti
+    e mantiene soltanto quelle con una superficie minima.
+
+    Parametri:
+    - slope: array della pendenza in gradi
+    - cell_size_x: dimensione della cella in metri sull'asse X
+    - cell_size_y: dimensione della cella in metri sull'asse Y
+    - max_slope: pendenza massima accettata
+    - min_area_m2: superficie minima dell'area in m²
+
+    Restituisce:
+    - flat_mask: maschera booleana delle aree pianeggianti
+    """
+
+    from scipy import ndimage
+
+    # Celle che rispettano la soglia di pendenza
+    flat_mask = slope <= max_slope
+
+    # Individuazione delle componenti connesse
+    structure = ndimage.generate_binary_structure(
+        2,
+        2
+    )
+
+    labeled_areas, num_areas = ndimage.label(
+        flat_mask,
+        structure=structure
+    )
+
+    # Superficie di una singola cella
+    cell_area_m2 = (
+        cell_size_x *
+        cell_size_y
+    )
+
+    # Dimensione di ogni area in m²
+    area_sizes_m2 = (
+        np.bincount(
+            labeled_areas.ravel()
+        )
+        * cell_area_m2
+    )
+
+    # Manteniamo soltanto le aree abbastanza grandi
+    valid_areas = (
+        area_sizes_m2 >= min_area_m2
+    )
+
+    valid_areas[0] = False
+
+    flat_mask = valid_areas[
+        labeled_areas
+    ]
+
+    return flat_mask
+# ============================================================
+# CANDIDATE TERRAIN MASK
+# ============================================================
+
+def calculate_candidate_mask(
+    flat_areas,
+    surface_score,
+    min_surface_score=0.5
+):
+    """
+    Identifica le aree che soddisfano contemporaneamente:
+
+    - pendenza accettabile
+    - superficie sufficientemente adatta
+
+    Restituisce una maschera booleana.
+    """
+
+    candidate_mask = (
+        flat_areas &
+        (surface_score >= min_surface_score)
+    )
+
+    return candidate_mask
