@@ -708,3 +708,23 @@ def calculate_trail_score(distance_m):
     )
 
     return np.clip(trail_score, 0, 1)
+
+def calculate_protected_area_mask(
+    protected_gdf,
+    transform,
+    crs,
+    shape,
+):
+    import rasterio.features
+
+    protected_gdf = protected_gdf.to_crs(crs)
+
+    protected_mask = rasterio.features.rasterize(
+        [(geom, 1) for geom in protected_gdf.geometry if geom is not None],
+        out_shape=shape,
+        transform=transform,
+        fill=0,
+        dtype="uint8",
+    )
+
+    return protected_mask.astype(bool)

@@ -19,6 +19,7 @@ from terrain import (
     calculate_track_score,
     calculate_trail_distance,
     calculate_trail_score,
+    calculate_protected_area_mask,
 )
 
 
@@ -366,8 +367,79 @@ print(
     "%"
 )
 roads_path = "data/raw/osm/roads.gpkg"
-
 roads = gpd.read_file(roads_path)
+
+protected_path = "data/raw/protected_areas/Natura2000_end2024.gpkg"
+
+protected_areas = gpd.read_file(
+    protected_path,
+    layer="NaturaSite_polygon",
+)
+
+protected_areas = protected_areas[
+    protected_areas.geometry.notna()
+]
+
+print("Natura 2000 caricate:", len(protected_areas))
+
+from shapely.geometry import box
+
+dem_bounds = rasterio.transform.array_bounds(
+    elevation.shape[0],
+    elevation.shape[1],
+    transform,
+)
+
+dem_polygon = box(
+    dem_bounds[0],
+    dem_bounds[1],
+    dem_bounds[2],
+    dem_bounds[3],
+)
+
+dem_area = gpd.GeoSeries(
+    [dem_polygon],
+    crs=crs,
+)
+
+protected_areas = protected_areas.to_crs(crs)
+
+protected_areas = protected_areas[
+    protected_areas.geometry.intersects(dem_area.iloc[0])
+]
+
+print("Natura 2000 nel DEM:", len(protected_areas))
+
+protected_mask = calculate_protected_area_mask(
+    protected_areas,
+    transform,
+    crs,
+    elevation.shape,
+)
+
+print(
+    "Area Natura 2000 nel DEM:",
+    protected_mask.sum() * cell_size_x * cell_size_y / 1e6,
+    "km²",
+)
+
+protected_mask_output = protected_mask.astype("uint8")
+
+with rasterio.open(
+    "data/processed/protected_area_mask.tif",
+    "w",
+    driver="GTiff",
+    height=protected_mask_output.shape[0],
+    width=protected_mask_output.shape[1],
+    count=1,
+    dtype="uint8",
+    crs=crs,
+    transform=transform,
+    nodata=0,
+) as dst:
+    dst.write(protected_mask_output, 1)
+
+print("Protected area mask salvata: data/processed/protected_area_mask.tif")
 
 major_types = [
     "motorway",
