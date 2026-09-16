@@ -787,6 +787,7 @@ def extract_candidate_zones(
 
     return zones
 
+
 def export_candidate_zones(
     terrain_quality,
     candidate_mask,
@@ -886,3 +887,67 @@ def export_candidate_zones(
     print(
         f"Candidate zones esportate: {output_path}"
     )
+
+
+def rank_candidate_zones(
+    zones,
+    score_weight=0.7,
+    area_weight=0.3,
+):
+    """
+    Ordina le candidate combinando qualità media e dimensione dell'area.
+    """
+
+    if not zones:
+        return []
+
+    scores = np.array(
+        [zone["mean_score"] for zone in zones],
+        dtype=float,
+    )
+
+    areas = np.array(
+        [zone["area_m2"] for zone in zones],
+        dtype=float,
+    )
+
+    score_min = scores.min()
+    score_max = scores.max()
+
+    area_min = areas.min()
+    area_max = areas.max()
+
+    if score_max > score_min:
+        normalized_scores = (
+            (scores - score_min)
+            / (score_max - score_min)
+        )
+    else:
+        normalized_scores = np.ones_like(scores)
+
+    if area_max > area_min:
+        normalized_areas = (
+            (areas - area_min)
+            / (area_max - area_min)
+        )
+    else:
+        normalized_areas = np.ones_like(areas)
+
+    for zone, normalized_score, normalized_area in zip(
+        zones,
+        normalized_scores,
+        normalized_areas,
+    ):
+        ranking_score = (
+            normalized_score * score_weight
+            + normalized_area * area_weight
+        )
+
+        zone["ranking_score"] = float(ranking_score)
+
+    zones.sort(
+        key=lambda zone: zone["ranking_score"],
+        reverse=True,
+    )
+
+    return zones

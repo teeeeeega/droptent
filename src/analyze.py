@@ -1,7 +1,7 @@
 import geopandas as gpd
 import numpy as np
 import rasterio
-from terrain import (
+from .terrain import (
     load_dem,
     calculate_slope,
     calculate_slope_score,
@@ -22,6 +22,7 @@ from terrain import (
     calculate_protected_area_mask,
     extract_candidate_zones,
     export_candidate_zones,
+    rank_candidate_zones,
 )
 
 
