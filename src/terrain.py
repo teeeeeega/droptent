@@ -728,3 +728,161 @@ def calculate_protected_area_mask(
     )
 
     return protected_mask.astype(bool)
+def extract_candidate_zones(
+    terrain_quality,
+    candidate_mask,
+    cell_size_x,
+    cell_size_y,
+    min_score=0.6,
+    min_area_m2=5000,
+):
+    from scipy import ndimage
+
+    quality_mask = (
+    candidate_mask
+    & (terrain_quality >= 0.6)
+)
+
+    labels, num_features = ndimage.label(
+        quality_mask,
+        structure=np.ones((3, 3), dtype=int),
+    )
+
+    if num_features == 0:
+        return []
+
+    areas = ndimage.sum(
+        quality_mask,
+        labels,
+        index=np.arange(1, num_features + 1),
+    )
+
+    pixel_area = cell_size_x * cell_size_y
+
+    zones = []
+
+    for label_id, pixel_count in enumerate(areas, start=1):
+        area_m2 = pixel_count * pixel_area
+
+        if area_m2 < min_area_m2:
+            continue
+
+        zone_mask = labels == label_id
+
+        scores = terrain_quality[zone_mask]
+
+        zones.append(
+            {
+                "label": label_id,
+                "area_m2": area_m2,
+                "mean_score": float(scores.mean()),
+                "max_score": float(scores.max()),
+            }
+        )
+
+    zones.sort(
+        key=lambda zone: zone["mean_score"],
+        reverse=True,
+    )
+
+    return zones
+
+def export_candidate_zones(
+    terrain_quality,
+    candidate_mask,
+    transform,
+    crs,
+    cell_size_x,
+    cell_size_y,
+    min_score=0.9,
+    min_area_m2=5000,
+    output_path="data/processed/candidate_zones.gpkg",
+):
+    import geopandas as gpd
+    from scipy import ndimage
+    from shapely.geometry import shape
+    from shapely.ops import unary_union
+    import rasterio.features
+
+    quality_mask = (
+    candidate_mask
+    & (terrain_quality >= 0.6)
+)
+
+    labels, num_features = ndimage.label(
+        quality_mask,
+        structure=np.ones((3, 3), dtype=int),
+    )
+
+    if num_features == 0:
+        return
+
+    areas = ndimage.sum(
+        quality_mask,
+        labels,
+        index=np.arange(1, num_features + 1),
+    )
+
+    pixel_area = cell_size_x * cell_size_y
+
+    zones = []
+
+    for label_id, pixel_count in enumerate(areas, start=1):
+        area_m2 = pixel_count * pixel_area
+
+        if area_m2 < min_area_m2:
+            continue
+
+        zone_mask = labels == label_id
+
+        scores = terrain_quality[zone_mask]
+
+        mean_score = float(scores.mean())
+        max_score = float(scores.max())
+        if mean_score < min_score:
+         continue
+
+        geometries = rasterio.features.shapes(
+            zone_mask.astype("uint8"),
+            mask=zone_mask,
+            transform=transform,
+        )
+
+        polygons = [
+            shape(geometry)
+            for geometry, value in geometries
+            if value == 1
+        ]
+
+        if not polygons:
+            continue
+
+        geometry = unary_union(polygons)
+
+        zones.append(
+            {
+                "geometry": geometry,
+                "label": label_id,
+                "area_m2": area_m2,
+                "mean_score": mean_score,
+                "max_score": max_score,
+            }
+        )
+
+    if not zones:
+        return
+
+    gdf = gpd.GeoDataFrame(
+        zones,
+        crs=crs,
+    )
+
+    gdf.to_file(
+        output_path,
+        layer="candidate_zones",
+        driver="GPKG",
+    )
+
+    print(
+        f"Candidate zones esportate: {output_path}"
+    )

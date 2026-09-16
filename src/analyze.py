@@ -20,6 +20,8 @@ from terrain import (
     calculate_trail_distance,
     calculate_trail_score,
     calculate_protected_area_mask,
+    extract_candidate_zones,
+    export_candidate_zones,
 )
 
 
@@ -670,3 +672,54 @@ with rasterio.open(
     dst.write(track_score_output, 1)
 
 print("Track Score salvato: data/processed/track_score.tif")
+candidate_zones = extract_candidate_zones(
+    terrain_quality,
+    candidate_mask,
+    cell_size_x,
+    cell_size_y,
+)
+
+print("\nCandidate Zones:")
+print("Numero zone:", len(candidate_zones))
+
+for min_area in [5000, 10000, 25000, 50000, 100000]:
+    count = sum(
+        zone["area_m2"] >= min_area
+        for zone in candidate_zones
+    )
+
+    print(
+        f"Zone >= {min_area} m²:",
+        count,
+    )
+
+for zone in candidate_zones[:20]:
+    print(
+        f"Zona {zone['label']}: "
+        f"{zone['area_m2']:.0f} m² | "
+        f"score medio {zone['mean_score']:.3f} | "
+        f"score max {zone['max_score']:.3f}"
+    )
+
+
+export_candidate_zones(
+    terrain_quality,
+    candidate_mask,
+    transform,
+    crs,
+    cell_size_x,
+    cell_size_y,
+    min_score=0.9,
+    min_area_m2=5000,
+)
+
+for min_score in [0.8, 0.9]:
+    count = sum(
+        zone["mean_score"] >= min_score
+        for zone in candidate_zones
+    )
+
+    print(
+        f"Zone con score medio >= {min_score}:",
+        count,
+    )
