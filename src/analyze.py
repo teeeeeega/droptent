@@ -17,6 +17,8 @@ from terrain import (
     calculate_road_score,
     calculate_track_distance,
     calculate_track_score,
+    calculate_trail_distance,
+    calculate_trail_score,
 )
 
 
@@ -394,6 +396,70 @@ track_distance = calculate_track_distance(
     cell_size_x,
     cell_size_y,
 )
+
+trail_distance = calculate_trail_distance(
+    candidate_mask,
+    roads,
+    transform,
+    crs,
+    cell_size_x,
+    cell_size_y,
+)
+
+print("\nTrail Distance:")
+print("Min:", trail_distance[candidate_mask].min())
+print("Max:", trail_distance[candidate_mask].max())
+print("Media:", trail_distance[candidate_mask].mean())
+
+trail_score = calculate_trail_score(trail_distance)
+
+trail_score[candidate_mask == 0] = 0
+
+print("\nTrail Score:")
+print("Min:", trail_score[candidate_mask].min())
+print("Max:", trail_score[candidate_mask].max())
+print("Media:", trail_score[candidate_mask].mean())
+print("Score > 0:", (trail_score[candidate_mask] > 0).mean() * 100, "%")
+print("Score >= 0.5:", (trail_score[candidate_mask] >= 0.5).mean() * 100, "%")
+print("Score >= 0.8:", (trail_score[candidate_mask] >= 0.8).mean() * 100, "%")
+
+trail_score_output = trail_score.astype("float32").copy()
+trail_score_output[candidate_mask == 0] = -1
+
+with rasterio.open(
+    "data/processed/trail_score.tif",
+    "w",
+    driver="GTiff",
+    height=trail_score_output.shape[0],
+    width=trail_score_output.shape[1],
+    count=1,
+    dtype="float32",
+    crs=crs,
+    transform=transform,
+    nodata=-1,
+) as dst:
+    dst.write(trail_score_output, 1)
+
+print("Trail Score salvato: data/processed/trail_score.tif")
+
+trail_score_output = trail_score.astype("float32").copy()
+trail_score_output[candidate_mask == 0] = -1
+
+with rasterio.open(
+    "data/processed/trail_score.tif",
+    "w",
+    driver="GTiff",
+    height=trail_score_output.shape[0],
+    width=trail_score_output.shape[1],
+    count=1,
+    dtype="float32",
+    crs=crs,
+    transform=transform,
+    nodata=-1,
+) as dst:
+    dst.write(trail_score_output, 1)
+
+print("Trail Score salvato: data/processed/trail_score.tif")
 
 def calculate_track_score(distance_m):
     track_score = np.zeros_like(distance_m, dtype=float)
