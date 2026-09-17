@@ -40,6 +40,11 @@ worldcover_path = (
     "worldcover_aligned.tif"
 )
 
+builtup_fraction_path = (
+    "data/processed/"
+    "builtup_fraction_geometric.tif"
+)
+
 water_path = "data/raw/osm/water.gpkg"
 
 
@@ -236,6 +241,19 @@ print(
     "\nCandidate mask salvata:",
     output_path
 )
+
+# ============================================================
+# CARICAMENTO BUILTUP FRACTION (GEOMETRIC)
+# ============================================================
+
+with rasterio.open(builtup_fraction_path) as bf_file:
+    builtup_fraction = bf_file.read(1)
+
+print("\nBuilt-up fraction (geometric) caricato.")
+print("Shape:", builtup_fraction.shape)
+print("Min:", builtup_fraction.min())
+print("Max:", builtup_fraction.max())
+print("Media:", builtup_fraction.mean())
 
 # ============================================================
 # TENT SCORE COMBINATO
@@ -614,6 +632,20 @@ terrain_quality = calculate_terrain_quality(
 
 terrain_quality[candidate_mask == 0] = 0
 
+# ============================================================
+# PENALIZZAZIONE BUILT-UP (S2_quad_w03)
+# ============================================================
+
+BUILTUP_WEIGHT = 0.3
+
+builtup_penalty = BUILTUP_WEIGHT * (builtup_fraction ** 2)
+terrain_quality = np.clip(terrain_quality * (1 - builtup_penalty), 0, 1)
+
+print("Built-up penalty applicata (weight=0.3, quadratic).")
+print("Penalty min:", builtup_penalty.min())
+print("Penalty max:", builtup_penalty.max())
+print("Penalty media:", builtup_penalty.mean())
+
 print("\nTerrain Quality:")
 print("Min:", terrain_quality.min())
 print("Max:", terrain_quality.max())
@@ -680,7 +712,9 @@ candidate_zones = extract_candidate_zones(
     cell_size_y,
 )
 
-print("\nCandidate Zones:")
+candidate_zones = rank_candidate_zones(candidate_zones)
+
+print("\nCandidate Zones (ranked):")
 print("Numero zone:", len(candidate_zones))
 
 for min_area in [5000, 10000, 25000, 50000, 100000]:
@@ -694,12 +728,14 @@ for min_area in [5000, 10000, 25000, 50000, 100000]:
         count,
     )
 
-for zone in candidate_zones[:20]:
+print("\nTop 10 candidate (by ranking_score):")
+for i, zone in enumerate(candidate_zones[:10], 1):
     print(
-        f"Zona {zone['label']}: "
-        f"{zone['area_m2']:.0f} m² | "
-        f"score medio {zone['mean_score']:.3f} | "
-        f"score max {zone['max_score']:.3f}"
+        f"#{i} | "
+        f"area={zone['area_m2']:.0f} m² | "
+        f"mean={zone['mean_score']:.3f} | "
+        f"max={zone['max_score']:.3f} | "
+        f"ranking={zone['ranking_score']:.3f}"
     )
 
 
