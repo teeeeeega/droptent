@@ -22,3 +22,10 @@ results/
 # Raw geospatial datasets
 data/raw/
 cache/
+
+# Node.js (test tooling only)
+node_modules/
+package.json
+package-lock.json
+test-console.cjs
+test-console.mjs

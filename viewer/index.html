@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Droptent - Terrain Quality Preview</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; }
+        #map { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+        #controls { position: fixed; top: 20px; right: 20px; z-index: 1000; background: white; padding: 16px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+        #legend { position: fixed; bottom: 20px; left: 20px; z-index: 1000; background: white; padding: 16px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+        .legend-title { font-weight: 600; margin-bottom: 8px; font-size: 14px; }
+        .legend-bar { width: 200px; height: 20px; border-radius: 4px; background: linear-gradient(to right, #d73027, #fc8d59, #fee08b, #d9ef8b, #1a9850); margin-bottom: 8px; }
+        .legend-labels { display: flex; justify-content: space-between; font-size: 12px; color: #666; }
+        .info { font-size: 13px; color: #333; }
+        .info-row { display: flex; gap: 8px; margin: 4px 0; }
+        .info-label { color: #666; font-size: 12px; }
+        .info-value { font-weight: 500; }
+        button { background: #2563eb; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 13px; margin-top: 8px; }
+        button:hover { background: #1d4ed8; }
+        #loading { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 24px 32px; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.2); z-index: 2000; display: none; }
+        /* Diagnostic panel */
+        #diag { position: fixed; top: 20px; left: 20px; z-index: 1000; background: white; padding: 16px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); font-family: monospace; font-size: 12px; max-width: 350px; }
+        .diag-row { display: flex; justify-content: space-between; margin: 4px 0; }
+        .diag-label { color: #666; }
+        .diag-value { font-weight: 500; }
+        .diag-ok { color: #22c55e; }
+        .diag-err { color: #ef4444; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div id="loading">Caricamento terrain_quality.tif...</div>
+    
+    <div id="controls">
+        <div class="info">
+            <div class="info-row"><span class="info-label">Layer:</span> <span class="info-value">terrain_quality</span></div>
+            <div class="info-row"><span class="info-label">EPSG:</span> <span class="info-value">4326</span></div>
+            <div class="info-row"><span class="info-label">Bounds:</span> <span class="info-value">N42 E013</span></div>
+            <div class="info-row"><span class="info-label">Valore:</span> <span id="pixel-value" class="info-value">-</span></div>
+        </div>
+        <button onclick="toggleLegend()">Mostra/Nascondi Legenda</button>
+    </div>
+
+    <div id="legend">
+        <div class="legend-title">Terrain Quality (0–1)</div>
+        <div class="legend-bar"></div>
+        <div class="legend-labels">
+            <span>0.0</span>
+            <span>0.25</span>
+            <span>0.50</span>
+            <span>0.75</span>
+            <span>1.0</span>
+        </div>
+        <div style="margin-top: 8px; font-size: 12px; color: #666;">
+            Rosso = basso · Giallo = medio · Verde = alto
+        </div>
+    </div>
+
+    <!-- Diagnostic panel -->
+    <div id="diag">
+        <div style="font-weight: bold; margin-bottom: 8px;">🔧 Diagnostica</div>
+        <div class="diag-row"><span class="diag-label">Leaflet:</span> <span id="diag-leaflet" class="diag-value diag-err">no</span></div>
+        <div class="diag-row"><span class="diag-label">Map container:</span> <span id="diag-map-container" class="diag-value diag-err">no</span></div>
+        <div class="diag-row"><span class="diag-label">COG loaded:</span> <span id="diag-cog" class="diag-value diag-err">no</span></div>
+        <div class="diag-row"><span class="diag-label">Raster loaded:</span> <span id="diag-raster" class="diag-value diag-err">no</span></div>
+        <div class="diag-row"><span class="diag-label">Raster size:</span> <span id="diag-size" class="diag-value">-</span></div>
+        <div class="diag-row"><span class="diag-label">Raster min/max:</span> <span id="diag-minmax" class="diag-value">-</span></div>
+        <div class="diag-row"><span class="diag-label">Canvas created:</span> <span id="diag-canvas" class="diag-value diag-err">no</span></div>
+        <div class="diag-row"><span class="diag-label">Canvas size:</span> <span id="diag-canvas-size" class="diag-value">-</span></div>
+        <div class="diag-row"><span class="diag-label">Overlay added:</span> <span id="diag-overlay" class="diag-value diag-err">no</span></div>
+        <div class="diag-row"><span class="diag-label">Bounds used:</span> <span id="diag-bounds" class="diag-value">-</span></div>
+    </div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/geotiff@2.1.2/dist-browser/geotiff.js"></script>
+        <script>
+            console.log('=== Script STARTED ===');
+            
+            // Immediately update diagnostic to show script is running
+            const earlyDiag = document.getElementById('diag-leaflet');
+            if (earlyDiag) {
+                earlyDiag.textContent = 'checking...';
+                earlyDiag.className = 'diag-value diag-err';
+            }
+            
+            console.log('L defined at script start:', typeof L !== 'undefined');
+            console.log('GeoTIFF global:', typeof GeoTIFF !== 'undefined');
+            
+            // Use GeoTIFF.fromUrl from the UMD global
+            const { fromUrl } = GeoTIFF;
+            console.log('fromUrl function:', typeof fromUrl);
+
+            // Wrap everything in async IIFE to support await
+            (async () => {
+                // Wait for L (Leaflet) to be defined globally
+                await new Promise(resolve => {
+                    if (typeof L !== 'undefined') {
+                        resolve();
+                    } else {
+                        const checkL = setInterval(() => {
+                            if (typeof L !== 'undefined') {
+                                clearInterval(checkL);
+                                resolve();
+                            }
+                        }, 10);
+                    }
+                });
+                
+                console.log('L defined after wait:', typeof L !== 'undefined');
+                console.log('GeoTIFF after wait:', typeof GeoTIFF !== 'undefined');
+                
+                // Color ramp: red -> yellow -> green
+                const colors = [
+                    [0, 215, 48, 39],      // 0.0 - red
+                    [0.25, 252, 141, 89],  // 0.25 - orange
+                    [0.5, 254, 224, 139],  // 0.5 - yellow
+                    [0.75, 217, 239, 139], // 0.75 - light green
+                    [1, 26, 152, 80]       // 1.0 - green
+                ];
+            
+                function interpolateColor(val) {
+                    if (val <= 0) return colors[0].slice(1);
+                    if (val >= 1) return colors[colors.length - 1].slice(1);
+                    for (let i = 0; i < colors.length - 1; i++) {
+                        if (val >= colors[i][0] && val <= colors[i + 1][0]) {
+                            const t = (val - colors[i][0]) / (colors[i + 1][0] - colors[i][0]);
+                            return [
+                                Math.round(colors[i][1] + t * (colors[i + 1][1] - colors[i][1])),
+                                Math.round(colors[i][2] + t * (colors[i + 1][2] - colors[i][2])),
+                                Math.round(colors[i][3] + t * (colors[i + 1][3] - colors[i][3]))
+                            ];
+                        }
+                    }
+                    return colors[colors.length - 1].slice(1);
+                }
+            
+                function colorToHex(rgb) {
+                    return '#' + rgb.map(v => v.toString(16).padStart(2, '0')).join('');
+                }
+            
+                // Diagnostic helper
+                function setDiag(id, value, ok = false) {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        el.textContent = value;
+                        el.className = 'diag-value' + (ok ? ' diag-ok' : ' diag-err');
+                    }
+                }
+            
+                // Create canvas for rendering
+                async function renderGeoTIFF(image) {
+                    const width = image.getWidth();
+                    const height = image.getHeight();
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    const imageData = ctx.createImageData(width, height);
+                    const data = imageData.data;
+                    
+                    // Read all rasters at once
+                    const raster = (await image.readRasters({ window: [0, 0, width, height] }))[0];
+                    const nodata = image.fileDirectory.GDAL_NODATA;
+                    
+                    let minVal = Infinity, maxVal = -Infinity;
+                    let validCount = 0;
+                    
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const idx = y * width + x;
+                            const val = raster[idx];
+                            const pixelIdx = idx * 4;
+                            
+                            if (nodata !== undefined && val === nodata) {
+                                data[pixelIdx + 3] = 0; // transparent
+                            } else if (val === 0 && nodata === 0) {
+                                data[pixelIdx + 3] = 0; // transparent for 0 nodata
+                            } else {
+                                if (val < minVal) minVal = val;
+                                if (val > maxVal) maxVal = val;
+                                validCount++;
+                                const clamped = Math.max(0, Math.min(1, val));
+                                const rgb = interpolateColor(clamped);
+                                data[pixelIdx] = rgb[0];
+                                data[pixelIdx + 1] = rgb[1];
+                                data[pixelIdx + 2] = rgb[2];
+                                data[pixelIdx + 3] = 255;
+                            }
+                        }
+                    }
+                    ctx.putImageData(imageData, 0, 0);
+                    
+                    return { canvas, width, height, minVal, maxVal, validCount, nodata };
+                }
+            
+                // Initialize map
+                console.log('Initializing map...');
+                const map = L.map('map', {
+                    center: [42.5, 13.5],
+                    zoom: 9,
+                    minZoom: 7,
+                    maxZoom: 14
+                });
+                console.log('Map initialized:', map);
+                setDiag('diag-leaflet', 'yes', true);
+            
+                const mapContainer = document.getElementById('map');
+                const mapHeight = mapContainer.clientHeight;
+                const mapWidth = mapContainer.clientWidth;
+                console.log('Map container size:', mapWidth, 'x', mapHeight);
+                setDiag('diag-map-container', `${mapWidth}x${mapHeight}`, mapWidth > 0 && mapHeight > 0);
+            
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                    attribution: '&copy; OpenStreetMap &copy; CARTO',
+                    subdomains: 'abcd',
+                    maxZoom: 19
+                }).addTo(map);
+            
+                // Load COG
+                const loading = document.getElementById('loading');
+                loading.style.display = 'block';
+            
+                const cogUrl = 'terrain_quality_cog.tif';
+            
+                let tiffImage = null;
+                let bounds = null;
+            
+                fromUrl(cogUrl)
+                    .then(tiff => {
+                        setDiag('diag-cog', 'yes', true);
+                        console.log('COG loaded:', tiff);
+                        return tiff.getImage();
+                    })
+                    .then(async image => {
+                        tiffImage = image;
+                        console.log('Image:', image);
+                        console.log('Image width:', image.getWidth(), 'height:', image.getHeight());
+                        
+                        const result = await renderGeoTIFF(image);
+                        const { canvas, width, height, minVal, maxVal, validCount, nodata } = result;
+                        
+                        console.log('Raster stats:', { width, height, minVal, maxVal, validCount, nodata });
+                        
+                        setDiag('diag-raster', 'yes', true);
+                        setDiag('diag-size', `${width}x${height}`);
+                        setDiag('diag-minmax', `${minVal.toFixed(4)} / ${maxVal.toFixed(4)} (valid: ${validCount})`);
+                        setDiag('diag-canvas', 'yes', true);
+                        setDiag('diag-canvas-size', `${canvas.width}x${canvas.height}`);
+                        
+                        // Bounds for Leaflet imageOverlay: [[south, west], [north, east]] = [[lat, lng], [lat, lng]]
+                        bounds = [
+                            [41.999861111111116, 12.99986111111111],  // bottom-left (south, west)
+                            [43.00013888888889, 14.000138888888888]   // top-right (north, east)
+                        ];
+                        
+                        setDiag('diag-bounds', `S:${bounds[0][0].toFixed(4)}, W:${bounds[0][1].toFixed(4)} / N:${bounds[1][0].toFixed(4)}, E:${bounds[1][1].toFixed(4)}`);
+                        
+                        const overlay = L.imageOverlay(canvas.toDataURL(), bounds, {
+                            opacity: 0.9,
+                            interactive: true
+                        }).addTo(map);
+                        
+                        setDiag('diag-overlay', 'yes', true);
+                        
+                        loading.style.display = 'none';
+                        
+                        // Mouse hover to show value
+                        map.on('mousemove', e => {
+                            const lat = e.latlng.lat;
+                            const lng = e.latlng.lng;
+                            
+                            if (!tiffImage) return;
+                            
+                            const x = (lng - bounds[0][1]) / (bounds[1][1] - bounds[0][1]) * tiffImage.getWidth();
+                            const y = (bounds[1][0] - lat) / (bounds[1][0] - bounds[0][0]) * tiffImage.getHeight();
+                            
+                            if (x >= 0 && x < tiffImage.getWidth() && y >= 0 && y < tiffImage.getHeight()) {
+                                (async () => {
+                                    const raster = (await tiffImage.readRasters({ 
+                                        window: [Math.floor(x), Math.floor(y), Math.floor(x) + 1, Math.floor(y) + 1] 
+                                    }))[0];
+                                    const val = raster[0];
+                                    const nodata = tiffImage.fileDirectory.GDAL_NODATA;
+                                    if (nodata !== undefined && val === nodata) {
+                                        document.getElementById('pixel-value').textContent = 'NoData';
+                                    } else {
+                                        document.getElementById('pixel-value').textContent = val.toFixed(4);
+                                    }
+                                })();
+                            } else {
+                                document.getElementById('pixel-value').textContent = '-';
+                            }
+                        });
+                    })
+                    .catch(err => {
+                        console.error('Error loading COG:', err);
+                        loading.style.display = 'none';
+                        alert('Errore caricamento COG: ' + err.message);
+                    });
+            
+                console.log('Script loaded successfully');
+            
+                // Expose toggleLegend globally for onclick handler
+                window.toggleLegend = function() {
+                    const legend = document.getElementById('legend');
+                    legend.style.display = legend.style.display === 'none' ? 'block' : 'none';
+                };
+            
+                // Also expose setDiag for debugging if needed
+                window.setDiag = function(id, value, ok = false) {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        el.textContent = value;
+                        el.className = 'diag-value' + (ok ? ' diag-ok' : ' diag-err');
+                    }
+                };
+            })();
+        </script>
+</body>
+</html>
